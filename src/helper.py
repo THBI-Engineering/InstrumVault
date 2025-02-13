@@ -32,67 +32,88 @@ def get_segments(wav_path, csv_path, output_dir):
 		segment.export(output_file, format="wav")
 		print(f"Saved: {output_file}")
 
-
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 import librosa
 import librosa.display
-import matplotlib.pyplot as plt
 from scipy.io import wavfile
 from scipy import signal
+from scipy.ndimage import gaussian_filter  # Import Gaussian filter
 
-def get_mel_spectrogram(audio_path, target_fs=16000, n_mels=256, window_length_ms=100, window_step_ms=25):
-	output_path = os.path.splitext(audio_path)[0] + ".png"  # 保存为 PNG 以支持透明背景
-	
-	# Read WAV file
-	fs, data = wavfile.read(audio_path)
+def get_spectrogram(audio_path, target_fs=16000, window_length_ms=100, window_step_ms=25, ylimit_max=None, xlimit_max=None, apply_gaussian_filter=True, sigma=1):
+    output_path = os.path.splitext(audio_path)[0] + f"_{target_fs}_{window_length_ms}_{window_step_ms}.png"  # 修改文件名
 
-	# Convert stereo to mono if needed
-	if len(data.shape) > 1:
-		data = np.mean(data, axis=1)  # Convert to mono
+    # Read WAV file
+    fs, data = wavfile.read(audio_path)
 
-	# Resample to target_fs
-	data = signal.resample(data, len(data) * target_fs // fs)
-	fs = target_fs
+    # Convert stereo to mono if needed
+    if len(data.shape) > 1:
+        data = np.mean(data, axis=1)  # Convert to mono
 
-	# Compute mel spectrogram using librosa
-	D = librosa.stft(data, n_fft=int(window_length_ms * fs / 1000), hop_length=int(window_step_ms * fs / 1000))
-	mel_spectrogram = librosa.feature.melspectrogram(S=np.abs(D), sr=fs, n_mels=n_mels)
-	mel_db = librosa.power_to_db(mel_spectrogram, ref=np.max)
+    # Resample to target_fs
+    data = signal.resample(data, len(data) * target_fs // fs)
+    fs = target_fs
 
-	# Plot and save mel spectrogram
-	fig, ax = plt.subplots(figsize=(12, 8))
-	ax.set_facecolor("none")  # 设置背景透明
+    # Compute STFT (no mel filter)
+    n_fft = int(window_length_ms * fs / 1000)  # Number of FFT points
+    hop_length = int(window_step_ms * fs / 1000)  # Step size
+    D = librosa.stft(data, n_fft=n_fft, hop_length=hop_length)
 
-	cmap = plt.cm.summer  # 绿色 colormap
+    # Convert amplitude to dB scale
+    spectrogram_db = librosa.amplitude_to_db(np.abs(D), ref=np.max)
 
-	# Plot Mel spectrogram with custom colormap
-	hop_length = int(window_step_ms * fs / 1000)
-	img = librosa.display.specshow(mel_db, x_axis='time', y_axis='mel', sr=fs, hop_length=hop_length, cmap=cmap, ax=ax)
-	
-	# Customize font sizes
-	plt.xlabel("Time (s)", fontsize=20, fontweight='bold')
-	plt.ylabel("Mel Frequency (Hz)", fontsize=20, fontweight='bold')
-	plt.xticks(fontsize=18)
-	plt.yticks(fontsize=18)
+    # Apply Gaussian filter if enabled
+    if apply_gaussian_filter:
+        spectrogram_db = gaussian_filter(spectrogram_db, sigma=sigma)  # Apply Gaussian filter with specified sigma
 
-	# Adjust x-axis ticks to be multiples of 0.5
-	duration = len(data) / fs  # Total duration in seconds
-	x_ticks = np.arange(0, duration, 0.5)
-	plt.xticks(x_ticks)
+    # Plot STFT spectrogram
+    fig, ax = plt.subplots(figsize=(12, 8))
+    ax.set_facecolor("none")  # 设置背景透明
+    cmap = 'inferno'  # You can change this colormap to 'magma', 'plasma', etc.
 
-	# Save with transparent background
-	ax = plt.gca()  # 获取当前轴对象
-	for spine in ax.spines.values():
-		spine.set_linewidth(3)  # 设置边框线宽
+    # Plot spectrogram with custom colormap
+    img = librosa.display.specshow(spectrogram_db, x_axis='time', y_axis='linear', 
+                                   sr=fs, hop_length=hop_length, cmap=cmap, ax=ax)
 
-	plt.tight_layout()
-	plt.savefig(output_path, dpi=300, bbox_inches="tight", transparent=True)
-	plt.close()
 
-	print(f"Mel spectrogram saved as {output_path}")
+    # 设置频率范围 (ylim)
+    if ylimit_max is not None:
+        ax.set_ylim(0, ylimit_max)
+
+    # 设置时间轴最大值 (xlim)
+    if xlimit_max is not None:
+        ax.set_xlim(0, xlimit_max)
+
+    # Remove x and y labels
+    plt.xlabel("")
+    plt.ylabel("")
+
+    # Customize font sizes for ticks
+    plt.xticks(fontsize=30)
+    plt.yticks(fontsize=30)
+
+    # Adjust x-axis ticks to be multiples of 0.5 and add unit 's' for seconds
+    duration = len(data) / fs  # Total duration in seconds
+    x_ticks = np.arange(0, duration, 0.5)
+    plt.xticks(x_ticks, [f'0' if x == 0 else (f'{int(x)}s' if x % 1 == 0 else f'{x:.1f}s') for x in x_ticks])
+
+    # Add 'Hz' unit to y-axis ticks
+    y_ticks = ax.get_yticks()
+    plt.yticks(y_ticks, [f'0' if y == 0 else f'{int(y)} Hz' for y in y_ticks])
+
+    # Save with transparent background
+    ax = plt.gca()  # 获取当前轴对象
+    for spine in ax.spines.values():
+        spine.set_linewidth(3)  # 设置边框线宽
+
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=300, bbox_inches="tight", transparent=True)
+    plt.close()
+
+    print(f"Spectrogram saved as {output_path}")
 
 
 
 if __name__ == "__main__":
-	get_mel_spectrogram("Instrument/筑/segments/筑颤音/筑颤音_1.wav")
+	get_spectrogram("Instrument/筑/segments/筑颤音/筑颤音_2.wav", target_fs=16000, xlimit_max=4,  ylimit_max=1200, window_length_ms=100, window_step_ms=1)
