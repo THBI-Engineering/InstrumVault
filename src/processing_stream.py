@@ -1,5 +1,5 @@
 import os
-from helper import get_mel_spectrogram, get_segments
+from helper import get_spectrogram, get_segments
 
 def create_segments(audio_fullname):
 	instrument_name = audio_fullname.split('_')[0]
@@ -10,7 +10,7 @@ def create_segments(audio_fullname):
 
 	get_segments(wav_file, csv_file, output_directory)
 
-def create_mel_spectrogram(instrument_name):
+def create_spectrogram(instrument_name):
 	root_dir=os.path.join("Instrument", instrument_name, 'segments')
 
 	for dirpath, dirnames, filenames in os.walk(root_dir):
@@ -19,8 +19,8 @@ def create_mel_spectrogram(instrument_name):
 				# Construct the full file path
 				audio_path = os.path.join(dirpath, file)
 							
-				# Call create_mel_spectrogram for each .wav file
-				get_mel_spectrogram(audio_path)
+				# Call create_spectrogram for each .wav file
+				get_spectrogram(audio_path)
 
 if __name__ == "__main__":
-	create_mel_spectrogram('筑')
+	create_spectrogram('筑')
